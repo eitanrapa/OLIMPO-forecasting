@@ -27,44 +27,6 @@ m = 9.109*10**(-31) # kg
 TCMB = 2.725 # K
 # canonical CMB
 
-def sigB(band_details, Time, Tnoise=3.0):
-    #NESB values from the NEP and band definitions
-    #Mode 0 specifies photometry
-    #Mode 1 specifies spectrometry
-    OE = 0.5
-    scan_ineff = 0.1
-    nu_min = band_details['nu_minGHz']*1E9 
-    nu_max = band_details['nu_maxGHz']*1E9
-    if (band_details['mode'] == 0):
-        nu_vec = (nu_max + nu_min)/2.0
-        del_nu = nu_max - nu_min
-    if (band_details['mode'] == 1):
-        nu_res = band_details['nu_resGHz']*1E9
-        Nse = int(np.ceil((nu_max-nu_min)/nu_res))
-        nu_vec = np.linspace(nu_min, nu_max, Nse) #in Hz
-    NEP_phot = band_details['NEP']
-    Npx = band_details['N_pixels']
-    AOnu = (c/nu_vec)**2
-
-    #NEP_phot1 = NEP.photonNEPdifflim(nu_min, nu_max, Tnoise) #This is CMB Tnoise
-    #NEP_phot2 = NEP.photonNEPdifflim(nu_min, nu_max, 10.0, aef=0.01) #Use real south pole data
-    #NEP_det = 1e-18 # ATTO WATTS per square-root(hz)
-    #NEP_phot = np.sqrt(NEP_phot1**2 + NEP_det**2)
-    
-    if (NEP_phot<1E-18):
-        print('Warning photon NEP is below 1 aW/rt.Hz!')
-    elif (NEP_phot>1E-15):
-        print('Warning photon NEP is above 1 fW/rt.Hz!')
-       
-    if (band_details['mode'] == 0):
-        delP = NEP_phot/np.sqrt(Time*Npx)
-        sigma_B = delP/(AOnu)/(del_nu*OE*scan_ineff)
-    if (band_details['mode'] == 1):
-        delP = 2*int(np.ceil(nu_max/nu_res))*NEP_phot/np.sqrt(Time*Npx)
-        sigma_B = delP/(AOnu)/(nu_res*OE*scan_ineff)
-       
-    return nu_vec, sigma_B
-
 #CMB Anisotropy function
 def dB(dt, frequency):
     temp = TCMB/(1+dt)
@@ -109,7 +71,7 @@ def model(theta, anisotropies, freq):
     ksz_anis, tsz_anis, cmb_anis = anisotropies
     
     #Read SIDES average model
-    df = pd.read_csv('/home/bolocam/erapaport/OLIMPO-forecasting/templates/sides.csv',header=None) 
+    df = pd.read_csv('/data/bolocam/bolocam/erapaport/sides.csv',header=None) 
     data = df.to_numpy()
     data = data.squeeze()
     SIDES = data*1e-20
@@ -130,7 +92,7 @@ def model_indv(theta, anisotropies, freq):
     ksz_anis, tsz_anis, cmb_anis = anisotropies
     
     #Read SIDES average model
-    df = pd.read_csv('/home/bolocam/erapaport/OLIMPO-forecasting/templates/sides.csv',header=None) 
+    df = pd.read_csv('/data/bolocam/bolocam/erapaport/sides.csv',header=None) 
     data = df.to_numpy()
     data = data.squeeze()
     SIDES = data*1e-20
@@ -153,7 +115,7 @@ def data_indv(theta, anisotropies, freq, long, lang):
     ksz_anis, tsz_anis, cmb_anis = anisotropies
     
     #Read SIDES fits file with emission lines
-    fname = '/home/bolocam/erapaport/OLIMPO-forecasting/templates/deLooze.fits'
+    fname = '/data/bolocam/bolocam/erapaport/continuum.fits'
     hdu = fits.open(fname)
     image_data = hdu[0].data
     total_SIDES = np.zeros(751)
@@ -185,7 +147,7 @@ def log_prior(theta):
     
     if (y < 0 or y > 0.1):
         return -np.inf
-    if (betac < -0.2 or betac > 0.2):
+    if (betac < -0.02 or betac > 0.02):
         return -np.inf
     if (temperature < 2.73 or temperature > 20):
         return -np.inf
@@ -205,25 +167,18 @@ def log_probability(theta, anisotropies,freq, data, noise):
     return lp + log_likelihood(theta, anisotropies, freq, data, noise)            
 
 #Main MCMC code
-def mcmc(Time, theta, anisotropies, Bands_list, long, lang, max_n, walkern, processors):
+def mcmc(theta, anisotropies, rms_values, frequencies, long, lang, max_n, walkern, processors):
     y, temperature, betac, amp_sides, b_sides = theta
     ksz_anis, tsz_anis, cmb_anis = anisotropies
-
-    nu_total_array = np.empty(0)
-    total_sz_array = np.empty(0)
-    sigma_b_array = np.empty(0)
     
-    #Create list of frequencies and NESB 
-    for bb in range(len(Bands_list)):
-        b = Bands_list[bb]
-        nu_vec_b, sigma_B_b = sigB(b, Time)
-        nu_total_array = np.concatenate((nu_total_array, nu_vec_b),axis=None)
-        sigma_b_array = np.concatenate((sigma_b_array, sigma_B_b),axis=None)
+    nu_total_array = np.array(frequencies)*1e9
+    x = h_p*nu_total_array/(k_b*TCMB)
+    sigma_b_array = 2*k_b*((nu_total_array/c)**2)*(x/(np.exp(x)-1))*(x*np.exp(x))/(np.exp(x)-1)*np.array(rms_values)*1e-6
    
     #Get signals and foregrounds
     
     #Read SIDES fits file with emission lines
-    fname = '/home/bolocam/erapaport/OLIMPO-forecasting/templates/deLooze.fits'
+    fname = '/data/bolocam/bolocam/erapaport/continuum.fits'
     hdu = fits.open(fname)
     image_data = hdu[0].data
     total_SIDES = np.zeros(751)

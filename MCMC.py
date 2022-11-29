@@ -149,14 +149,14 @@ def log_prior(theta):
         return -np.inf
     if (betac < -0.02 or betac > 0.02):
         return -np.inf
-    if (temperature < 2.73 or temperature > 20):
-        return -np.inf
+    #if (temperature < 2.73 or temperature > 20):
+    #    return -np.inf
     if (amp_sides < 0 or amp_sides > 2.5):
         return -np.inf
     if (b_sides < 0 or b_sides > 2.5):
         return -np.inf
-    mu = 5.0
-    sigma = 0.5
+    mu = 0.5
+    sigma = 0.05
     #Gaussian prior on temperature with mean of mu and std. deviation of sigma
     return np.log(1.0/(np.sqrt(2*np.pi)*sigma))-0.5*(temperature-mu)**2/sigma**2
 
